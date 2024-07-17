@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
 const { uploadOnCloudinary } = require("../../utility/cloudanry");
+const { sendEmail } = require("../../utility/Email"); 
+const {generateOTP} = require("../../utility/otp");
 
 const getNextId = async () => {
   try {
@@ -28,18 +30,28 @@ exports.signup = async (req, res) => {
       ? await uploadOnCloudinary(req.file.path)
       : "default-file.jpg";
 
+    const otp = generateOTP();
+
     const result = await User.create({
       id: id,
       name: name,
       email: email,
       password: hashedPassword,
       file: fileUrl,
+      otp,
+      otpCreatedAt: new Date(),
+      isVerified: false,
     });
 
-    res
-      .status(201)
-      .json({ message: "User successfully created", data: result });
+    await sendEmail(
+      email,
+      "Verify your email",
+      `Your OTP code is ${otp}`
+    );
+
+    res.status(201).json({ message: "User successfully created. Please check your email for the OTP code.", data: result });
   } catch (error) {
+    console.log(error)
     res.status(500).json({ message: "Error creating user", error });
   }
 };
@@ -53,6 +65,10 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "User not found." });
     }
 
+    if (!user.isVerified) {
+      return res.status(401).json({ message: "Email not verified." });
+    }
+
     // Compare the password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -60,7 +76,7 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id, email: user.email, name: user.name,file:user.file},
+      { userId: user._id, email: user.email, name: user.name, file: user.file },
       process.env.JWT_SECRET
     );
 
@@ -69,6 +85,7 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: "Error logging in", error });
   }
 };
+
 
 exports.showdata = async (req, res) => {
   try {
@@ -178,3 +195,66 @@ exports.deletedata = async (req, res) => {
 exports.logout = async (req, res) => {
   res.status(200).json({ message: "Logout successful" });
 };
+
+// varify email
+exports.verifyEmail = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const currentTime = new Date();
+    const otpValidDuration = 2 * 60 * 1000; // 2 minutes in milliseconds
+
+    if (currentTime - user.otpCreatedAt > otpValidDuration) {
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    user.isVerified = true;
+    user.otp = null;
+    user.otpCreatedAt = null;
+    await user.save();
+
+    res.status(200).json({ message: "Email verified successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error verifying email", error });
+  }
+};
+
+// resend email
+exports.resendOTP = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const otp = generateOTP();
+    user.otp = otp;
+    user.otpCreatedAt = new Date();
+    await user.save();
+
+    await sendEmail(
+      email,
+      "Resend OTP",
+      `Your new OTP code is ${otp}`
+    );
+
+    res.status(200).json({ message: "OTP resent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error resending OTP", error });
+  }
+};
+
+

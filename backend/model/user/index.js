@@ -21,6 +21,16 @@ const UserSchema = new mongoose.Schema({
   file: {
     type: String,
   },
+  otp: {
+    type: String,
+  },
+  otpCreatedAt: {
+    type: Date,
+  },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 module.exports = mongoose.model("User", UserSchema);
