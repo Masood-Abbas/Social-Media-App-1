@@ -13,62 +13,34 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { useFormik } from "formik";
+import { signupValidationSchema } from "../../validation";
 import "../../../public/css/form/style.css";
 
 export const SignUp = () => {
   const navigate = useNavigate();
-
-  const [signupValues, setSignupValues] = useState({
-    name: "",
-    email: "",
-    password: "",
-    profilePicture: null,
-  });
-
-  const signupFileField = useRef(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [selectedFileName, setSelectedFileName] = useState("");
-  const [errors, setErrors] = useState({
-    name: "",
-    email: "",
-    password: "",
-    profilePicture: "",
-  });
   const [loading, setLoading] = useState(false);
+  const signupFileField = useRef(null);
 
-  const handleSignupChange = (e) => {
-    const { name, value } = e.target;
-    setSignupValues({ ...signupValues, [name]: value });
-
-    // Validate input on change
-    validateField(name, value);
-  };
-
-  const handleSignupFile = (e) => {
-    const file = e.target.files[0];
-    setSignupValues({ ...signupValues, profilePicture: file });
-    setSelectedFileName(file ? file.name : ""); // Set selected file name
-  };
-
-  const handlePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  const handleSignupSubmit = async (e) => {
-    e.preventDefault();
-
-    const isValid = validateForm();
-
-    if (isValid) {
+  const formik = useFormik({
+    initialValues: {
+      name: "",
+      email: "",
+      password: "",
+      profilePicture: null,
+    },
+    validationSchema: signupValidationSchema,
+    onSubmit: async (values, { resetForm }) => {
       setLoading(true); // Show spinner
 
       const formData = new FormData();
-      formData.append("name", signupValues.name);
-      formData.append("email", signupValues.email);
-      formData.append("password", signupValues.password);
-      if (signupValues.profilePicture) {
-        formData.append("profilePicture", signupValues.profilePicture);
+      formData.append("name", values.name);
+      formData.append("email", values.email);
+      formData.append("password", values.password);
+      if (values.profilePicture) {
+        formData.append("profilePicture", values.profilePicture);
       }
 
       try {
@@ -79,66 +51,26 @@ export const SignUp = () => {
         });
 
         console.log("Signup Successful");
-        navigate("/login");
+        navigate("/verify-email", { state: { email: values.email } });
       } catch (error) {
-        console.error(
-          "Error",
-          error.response ? error.response.data : error.message
-        );
+        console.error("Error", error.response ? error.response.data : error.message);
         setError("Failed to create account. Please try again.");
       }
 
       setLoading(false); // Hide spinner
 
-      setSignupValues({
-        name: "",
-        email: "",
-        password: "",
-        profilePicture: null,
-      });
+      resetForm();
       signupFileField.current.value = "";
-      setSelectedFileName("");
-    } else {
-      console.log("Form is invalid. Please check the fields.");
-    }
+    },
+  });
+
+  const handlePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
-  const validateField = (fieldName, value) => {
-    let errorMessage = "";
-
-    switch (fieldName) {
-      case "name":
-        errorMessage = value.trim().length === 0 ? "Name is required" : "";
-        break;
-      case "email":
-        errorMessage = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-          ? ""
-          : "Invalid email address";
-        break;
-      case "password":
-        errorMessage =
-          value.length < 6 ? "Password must be at least 6 characters long" : "";
-        break;
-      default:
-        break;
-    }
-
-    setErrors((prevErrors) => ({
-      ...prevErrors,
-      [fieldName]: errorMessage,
-    }));
-
-    return errorMessage === "";
-  };
-
-  const validateForm = () => {
-    const { name, email, password } = signupValues;
-
-    const nameValid = validateField("name", name);
-    const emailValid = validateField("email", email);
-    const passwordValid = validateField("password", password);
-
-    return nameValid && emailValid && passwordValid;
+  const handleSignupFile = (e) => {
+    const file = e.target.files[0];
+    formik.setFieldValue("profilePicture", file);
   };
 
   return (
@@ -146,7 +78,7 @@ export const SignUp = () => {
       <Backdrop open={loading} style={{ zIndex: 1 }}>
         <CircularProgress color="inherit" />
       </Backdrop>
-      <form className="form" onSubmit={handleSignupSubmit}>
+      <form className="form" onSubmit={formik.handleSubmit}>
         <h2>Create Account</h2>
         <FormControl fullWidth margin="normal">
           <TextField
@@ -155,12 +87,11 @@ export const SignUp = () => {
             type="text"
             label="Name"
             placeholder="Enter your name"
-            value={signupValues.name}
-            onChange={handleSignupChange}
-            onBlur={(e) => validateField(e.target.name, e.target.value)} // Add onBlur event
-            required
-            error={errors.name.length > 0}
-            helperText={errors.name}
+            value={formik.values.name}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            error={formik.touched.name && Boolean(formik.errors.name)}
+            helperText={formik.touched.name && formik.errors.name}
           />
         </FormControl>
         <FormControl fullWidth margin="normal">
@@ -170,12 +101,11 @@ export const SignUp = () => {
             type="email"
             label="Email"
             placeholder="Enter your email"
-            value={signupValues.email}
-            onChange={handleSignupChange}
-            onBlur={(e) => validateField(e.target.name, e.target.value)} // Add onBlur event
-            required
-            error={errors.email.length > 0}
-            helperText={errors.email}
+            value={formik.values.email}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            error={formik.touched.email && Boolean(formik.errors.email)}
+            helperText={formik.touched.email && formik.errors.email}
           />
         </FormControl>
         <FormControl fullWidth margin="normal">
@@ -185,12 +115,11 @@ export const SignUp = () => {
             type={showPassword ? "text" : "password"}
             label="Password"
             placeholder="Enter your password"
-            value={signupValues.password}
-            onChange={handleSignupChange}
-            onBlur={(e) => validateField(e.target.name, e.target.value)} // Add onBlur event
-            required
-            error={errors.password.length > 0}
-            helperText={errors.password}
+            value={formik.values.password}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
+            error={formik.touched.password && Boolean(formik.errors.password)}
+            helperText={formik.touched.password && formik.errors.password}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -213,7 +142,7 @@ export const SignUp = () => {
           />
           <label htmlFor="signupProfilePicture">
             <Button variant="outlined" component="span" fullWidth>
-              {selectedFileName || "Choose File"}
+              {formik.values.profilePicture ? formik.values.profilePicture.name : "Choose File"}
             </Button>
           </label>
         </FormControl>
